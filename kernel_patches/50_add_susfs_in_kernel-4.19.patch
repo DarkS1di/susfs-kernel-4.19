@@ -661,7 +661,7 @@ index 5e94ec9f45d4..33e4c5f8f81d 100644
 +
 +		if (name) {
 +			mnt->mnt_devname = kstrdup_const(name,
-+							 GFP_KERNEL);
++							 GFP_KERNEL_ACCOUNT);
 +			if (!mnt->mnt_devname)
 +				goto out_free_cache;
 +		}
@@ -713,7 +713,7 @@ index 5e94ec9f45d4..33e4c5f8f81d 100644
 +
 +		if (name) {
 +			mnt->mnt_devname = kstrdup_const(name,
-+							 GFP_KERNEL);
++							 GFP_KERNEL_ACCOUNT);
 +			if (!mnt->mnt_devname)
 +				goto out_free_cache;
 +		}
@@ -758,17 +758,17 @@ index 5e94ec9f45d4..33e4c5f8f81d 100644
  static struct mount *alloc_vfsmnt(const char *name)
  {
  	struct mount *mnt = kmem_cache_zalloc(mnt_cache, GFP_KERNEL);
-@@ -199,6 +375,10 @@ static struct mount *alloc_vfsmnt(const char *name)
- #else
+@@ -200,6 +376,10 @@ static struct mount *alloc_vfsmnt(const char *name)
  		mnt->mnt_count = 1;
  		mnt->mnt_writers = 0;
-+#endif
+ #endif
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +		// Make sure mnt->mnt.susfs_mnt_id_backup is initialized every time.
 +		mnt->mnt.susfs_mnt_id_backup = 0;
- #endif
++#endif
  		mnt->mnt.data = NULL;
  
+ 		INIT_HLIST_NODE(&mnt->mnt_hash);
 @@ -953,7 +1133,18 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void
  	if (!type)
  		return ERR_PTR(-ENODEV);

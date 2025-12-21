@@ -9,7 +9,7 @@
 ## Compatibility ##
 - The susfs kernel patches may differ for different kernel version or even on the same kernel version, you may need to create your own patches for your kernel.
 
-## Patch Instruction (For GKI Kernel only and building from official google artifacts) ##
+## Patch Instruction ##
 **- Prerequisite -**
 1. All susfs patches are mainly based on the **original official KernelSU (the one from weishu)** with **tag / release tag**, so you should clone his repo with **tag / release tag** and clone this susfs branch with a **tag / release tag** or up to a commit message containing **"Bump version to vX.X.X"** to get a better patching result.
 2. Since v2.0.0, SUSFS does not rely on kernel features like KPROBES, KRETPROBES and HAVE_SYSCALL_TRACEPOINTS, which means it will patch all the KernelSU code to use inline hooks now, even for the sucompat code.

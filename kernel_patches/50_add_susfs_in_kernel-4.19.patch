@@ -1376,24 +1376,23 @@ index bd07f0f4f06b..be212d81b87b 100644
  	if (sb->s_op->show_devname) {
  		seq_puts(m, "device ");
 diff --git a/fs/read_write.c b/fs/read_write.c
-index 650fc7e0f3a6..72919c5e2912 100644
+index 650fc7e0f3a6..231e7536b09b 100644
 --- a/fs/read_write.c
 +++ b/fs/read_write.c
-@@ -586,8 +586,19 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
+@@ -586,8 +586,18 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
  	return ret;
  }
  
 +#ifdef CONFIG_KSU_SUSFS
-+extern bool ksu_vfs_read_hook __read_mostly;
-+extern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd,
-+               char __user **buf_ptr, size_t *count_ptr);
++extern bool ksu_init_rc_hook __read_mostly;
++extern __attribute__((cold)) void ksu_handle_sys_read(unsigned int fd);
 +#endif
 +
  SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
  {
 +#ifdef CONFIG_KSU_SUSFS
-+	if (unlikely(ksu_vfs_read_hook))
-+		ksu_handle_sys_read(fd, &buf, &count);
++	if (unlikely(ksu_init_rc_hook))
++		ksu_handle_sys_read(fd);
 +#endif
 +
  	return ksys_read(fd, buf, count);
@@ -1859,7 +1858,7 @@ index 3c5ce8a0ddc9..cf5811b2e082 100644
  	if (error >= 0)
  		error = buf.error;
 diff --git a/fs/stat.c b/fs/stat.c
-index 376543199b5a..094b40fde0be 100644
+index 376543199b5a..1944f713a543 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -17,10 +17,18 @@
@@ -1935,6 +1934,30 @@ index 376543199b5a..094b40fde0be 100644
  	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
  		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
  		return -EINVAL;
+@@ -642,6 +683,11 @@ COMPAT_SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+ 	return cp_compat_stat(&stat, statbuf);
+ }
+ 
++#ifdef CONFIG_KSU_SUSFS
++extern bool ksu_init_rc_hook __read_mostly;
++extern void ksu_handle_sys_newfstatat(int fd, loff_t *kstat_size_ptr);
++#endif // #ifdef CONFIG_KSU_SUSFS
++
+ #ifndef __ARCH_WANT_STAT64
+ COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
+ 		       const char __user *, filename,
+@@ -653,6 +699,11 @@ COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
+ 	error = vfs_fstatat(dfd, filename, &stat, flag);
+ 	if (error)
+ 		return error;
++#ifdef CONFIG_KSU_SUSFS
++	if (unlikely(ksu_init_rc_hook)) {
++		ksu_handle_sys_newfstatat(dfd, &stat.size);
++	}
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 	return cp_compat_stat(&stat, statbuf);
+ }
+ #endif
 diff --git a/fs/statfs.c b/fs/statfs.c
 index 29786598c2b5..335c0430c48c 100644
 --- a/fs/statfs.c
@@ -2073,28 +2096,31 @@ index 3a87fee47d3a..450f10404997 100644
  	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
  		return -EPERM;
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 6ac5d1bed8d1..f5835fe65ac5 100644
+index 6ac5d1bed8d1..f97fc38ef4ca 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -688,8 +688,17 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
- 	return retval;
+@@ -618,6 +618,9 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+ 	return __sys_setuid(uid);
  }
  
 +#ifdef CONFIG_KSU_SUSFS
 +extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);
 +#endif
-+
- SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
- {
-+#ifdef CONFIG_KSU_SUSFS
-+	if (ksu_handle_setresuid(ruid, euid, suid)) {
-+		pr_info("Something wrong with ksu_handle_setresuid()\n");
-+	}
-+#endif
- 	return __sys_setresuid(ruid, euid, suid);
- }
  
-@@ -1240,12 +1249,18 @@ static int override_release(char __user *release, size_t len)
+ /*
+  * This function implements a generic ability to update ruid, euid,
+@@ -631,6 +634,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+ 	int retval;
+ 	kuid_t kruid, keuid, ksuid;
+ 
++#ifdef CONFIG_KSU_SUSFS
++	(void)ksu_handle_setresuid(ruid, euid, suid);
++#endif
++
+ 	kruid = make_kuid(ns, ruid);
+ 	keuid = make_kuid(ns, euid);
+ 	ksuid = make_kuid(ns, suid);
+@@ -1240,12 +1247,18 @@ static int override_release(char __user *release, size_t len)
  	return ret;
  }
  

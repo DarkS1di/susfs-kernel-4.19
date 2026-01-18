@@ -1858,7 +1858,7 @@ index 3c5ce8a0ddc9..cf5811b2e082 100644
  	if (error >= 0)
  		error = buf.error;
 diff --git a/fs/stat.c b/fs/stat.c
-index 376543199b5a..1944f713a543 100644
+index 376543199b5a..86409cc1b7fb 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -17,10 +17,18 @@
@@ -1898,7 +1898,30 @@ index 376543199b5a..1944f713a543 100644
  	stat->dev = inode->i_sb->s_dev;
  	stat->ino = inode->i_ino;
  	stat->mode = inode->i_mode;
-@@ -148,6 +167,16 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
+@@ -117,6 +136,11 @@ int vfs_getattr(const struct path *path, struct kstat *stat,
+ }
+ EXPORT_SYMBOL(vfs_getattr);
+ 
++#ifdef CONFIG_KSU_SUSFS
++extern bool ksu_init_rc_hook __read_mostly;
++extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
++#endif // #ifdef CONFIG_KSU_SUSFS
++
+ /**
+  * vfs_statx_fd - Get the enhanced basic attributes by file descriptor
+  * @fd: The file descriptor referring to the file of interest
+@@ -142,12 +166,27 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
+ 	if (f.file) {
+ 		error = vfs_getattr(&f.file->f_path, stat,
+ 				    request_mask, query_flags);
++#ifdef CONFIG_KSU_SUSFS
++		if (unlikely(ksu_init_rc_hook)) {
++			ksu_handle_vfs_fstat(fd, &stat->size);
++		}
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 		fdput(f);
+ 	}
+ 	return error;
  }
  EXPORT_SYMBOL(vfs_statx_fd);
  
@@ -1915,7 +1938,7 @@ index 376543199b5a..1944f713a543 100644
  /**
   * vfs_statx - Get basic and extra attributes by filename
   * @dfd: A file descriptor representing the base dir for a relative filename
-@@ -170,6 +199,18 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+@@ -170,6 +209,18 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
  	int error = -EINVAL;
  	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
  
@@ -1934,30 +1957,6 @@ index 376543199b5a..1944f713a543 100644
  	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
  		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
  		return -EINVAL;
-@@ -642,6 +683,11 @@ COMPAT_SYSCALL_DEFINE2(newlstat, const char __user *, filename,
- 	return cp_compat_stat(&stat, statbuf);
- }
- 
-+#ifdef CONFIG_KSU_SUSFS
-+extern bool ksu_init_rc_hook __read_mostly;
-+extern void ksu_handle_sys_newfstatat(int fd, loff_t *kstat_size_ptr);
-+#endif // #ifdef CONFIG_KSU_SUSFS
-+
- #ifndef __ARCH_WANT_STAT64
- COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
- 		       const char __user *, filename,
-@@ -653,6 +699,11 @@ COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
- 	error = vfs_fstatat(dfd, filename, &stat, flag);
- 	if (error)
- 		return error;
-+#ifdef CONFIG_KSU_SUSFS
-+	if (unlikely(ksu_init_rc_hook)) {
-+		ksu_handle_sys_newfstatat(dfd, &stat.size);
-+	}
-+#endif // #ifdef CONFIG_KSU_SUSFS
- 	return cp_compat_stat(&stat, statbuf);
- }
- #endif
 diff --git a/fs/statfs.c b/fs/statfs.c
 index 29786598c2b5..335c0430c48c 100644
 --- a/fs/statfs.c
